@@ -95,7 +95,6 @@ export function setupAlertsModal(drawer) {
 }
 
 // Function that generates the content of the modal window based on the title
-import { renderTopMovers } from '../components/top-movers.js';
 
 export function generateDrawerContent(title) {
   let content = '';
