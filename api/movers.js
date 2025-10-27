@@ -1,19 +1,24 @@
 // src/pages/api/movers.js
 const BYBIT_API_BASE = 'https://api.bytick.com/v5';
 
-
 async function bybitFetch(path, params = {}) {
   const url = new URL(BYBIT_API_BASE + path);
   url.search = new URLSearchParams(params).toString();
-  const response = await fetch(url.toString());
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; ByAgentBot/1.0)',
+      'Accept': 'application/json, text/plain, */*'
+    }
+  });
+
   const text = await response.text();
 
-  // Try to parse JSON
   let json;
   try {
     json = JSON.parse(text);
   } catch {
-    throw new Error(`Bybit returned invalid response (HTML or text): ${text.slice(0, 100)}`);
+    throw new Error(`Bybit returned non-JSON (${text.slice(0, 100)})`);
   }
 
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -22,7 +27,7 @@ async function bybitFetch(path, params = {}) {
 }
 
 async function fetchTopMovers(dir = 'gainers', limit = 50) {
-  // ✅ use /market/tickers instead of instruments-info
+  // ✅ use market/tickers — public, works for linear
   const result = await bybitFetch('/market/tickers', { category: 'linear' });
   const all = result.list || [];
 
@@ -35,7 +40,6 @@ async function fetchTopMovers(dir = 'gainers', limit = 50) {
     })
     .slice(0, limit);
 
-  // Fetch latest funding rate for each symbol
   const fundingRates = await Promise.all(
     topSorted.map(async (item) => {
       try {
@@ -67,7 +71,7 @@ export default async function handler(req, res) {
     res.status(500).json({
       retCode: 10001,
       retMsg: `Internal Server Error: ${error.message}`,
-      result: null,
+      result: null
     });
   }
 }
