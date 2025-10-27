@@ -1,5 +1,6 @@
 // src/pages/api/movers.js
-const BYBIT_API_BASE = 'https://api.bybit.com/v5';
+const BYBIT_API_BASE = 'https://api.bytick.com/v5';
+
 
 async function bybitFetch(path, params = {}) {
   const url = new URL(BYBIT_API_BASE + path);
