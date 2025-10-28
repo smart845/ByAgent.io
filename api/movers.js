@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 
 const router = express.Router();
 
-// 🔁 Список зеркал Bybit, чтобы обойти блокировки по странам
+// 🔁 Список зеркал Bybit, чтобы обходить блокировки по регионам
 const BYBIT_MIRRORS = [
   "https://api.bytick.com",
   "https://api.bybit.me",
@@ -11,18 +11,16 @@ const BYBIT_MIRRORS = [
   "https://api.bybitglobal.com"
 ];
 
-// 🔍 Функция для получения данных с Bybit с перебором зеркал
+// 🔍 Универсальная функция запроса к Bybit
 async function fetchBybitData() {
   const endpoint = "/v5/market/tickers?category=linear";
   let lastError = null;
 
   for (const base of BYBIT_MIRRORS) {
-  const url = `${base}${endpoint}`;
+    const url = `${base}${endpoint}`;
     console.log(`🌍 Trying ${url}`);
     try {
       const response = await fetch(url);
-
-      // Проверяем успешный ответ
       if (response.ok) {
         const data = await response.json();
         if (data?.result?.list) {
@@ -40,7 +38,7 @@ async function fetchBybitData() {
     }
   }
 
-  throw new Error(`All Bybit mirrors failed${lastError ? : ${lastError.message} : ""}`);
+  throw new Error(`All Bybit mirrors failed${lastError ? `: ${lastError.message}` : ""}`);
 }
 
 // 📊 API /api/movers
@@ -48,7 +46,7 @@ router.get("/movers", async (req, res) => {
   try {
     const data = await fetchBybitData();
 
-    // Пример сортировки — по объёму торгов
+    // Сортируем по объёму торгов
     const sorted = data
       .filter(item => item.volume24h && !isNaN(Number(item.volume24h)))
       .sort((a, b) => Number(b.volume24h) - Number(a.volume24h))
