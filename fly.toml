@@ -1,23 +1,27 @@
-# fly.toml app configuration file generated for byagent-io on 2025-10-28T10:48:38Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
+# fly.toml app configuration file for Fly.io
+# Updated for Node.js (Express/Vite hybrid) app running on port 8080
 
-app = 'byagent-io'
-primary_region = 'fra'
+app = "byagent-io"
+primary_region = "fra"
 
 [build]
 
 [http_service]
-  internal_port = 80
+  # Порт должен совпадать с тем, что указан в Dockerfile (ENV PORT=8080)
+  internal_port = 8080
   force_https = true
-  auto_stop_machines = 'stop'
+
+  # Автоуправление машинами
+  auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 0
-  processes = ['app']
+
+  # Минимум 1 активная машина (чтобы API и бот всегда работали)
+  min_machines_running = 1
+
+  # Основной процесс приложения
+  processes = ["app"]
 
 [[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
+  memory = "1gb"
+  cpu_kind = "shared"
   cpus = 1
-  memory_mb = 1024
