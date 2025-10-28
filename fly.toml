@@ -1,4 +1,3 @@
-# fly.toml app configuration file
 app = "byagent-io"
 primary_region = "fra"
 
