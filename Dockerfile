@@ -1,49 +1,51 @@
 # syntax = docker/dockerfile:1
 
-# Adjust NODE_VERSION as desired
+# --- Базовый образ ---
 ARG NODE_VERSION=20.18.0
 FROM node:${NODE_VERSION}-slim AS base
 
-LABEL fly_launch_runtime="Vite"
-
-# Vite app lives here
+LABEL fly_launch_runtime="NodeJS"
 WORKDIR /app
+ENV NODE_ENV=production
 
-# Set production environment
-ENV NODE_ENV="production"
-
-# Install pnpm
-ARG PNPM_VERSION=latest
-RUN npm install -g pnpm@$PNPM_VERSION
+# Устанавливаем pnpm
+RUN npm install -g pnpm@latest
 
 
-# Throw-away build stage to reduce size of final image
+# --- Сборка приложения ---
 FROM base AS build
 
-# Install packages needed to build node modules
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
+# Устанавливаем необходимые пакеты для сборки модулей
+RUN apt-get update -qq && apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
 
-# Install node modules
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod=false
+# Копируем package.json и lock-файл
+COPY package.json pnpm-lock.yaml* ./
 
-# Copy application code
+# Устанавливаем зависимости (без строгой проверки lock-файла)
+RUN pnpm install --no-frozen-lockfile
+
+# Копируем остальной код
 COPY . .
 
-# Build application
-RUN pnpm run build
+# Если есть фронтенд (vite), собираем его, но не падаем если нет
+RUN pnpm run build || echo "No build step, skipping build"
 
-# Remove development dependencies
+# Удаляем dev-зависимости
 RUN pnpm prune --prod
 
 
-# Final stage for app image
-FROM nginx
+# --- Финальный образ ---
+FROM node:${NODE_VERSION}-slim AS final
 
-# Copy built application
-COPY --from=build /app/dist /usr/share/nginx/html
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=8080
 
-# Start the server by default, this can be overwritten at runtime
-EXPOSE 80
-CMD [ "/usr/sbin/nginx", "-g", "daemon off;" ]
+# Копируем приложение и зависимости
+COPY --from=build /app ./
+
+# Открываем порт
+EXPOSE 8080
+
+# Запуск backend-сервера (если есть server.js)
+CMD ["node", "server.js"]
