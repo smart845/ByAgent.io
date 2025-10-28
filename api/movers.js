@@ -17,7 +17,7 @@ async function fetchBybitData() {
   let lastError = null;
 
   for (const base of BYBIT_MIRRORS) {
-    const url = ${base}${endpoint};
+  const url = ${base}${endpoint}; 
     console.log(`🌍 Trying ${url}`);
     try {
       const response = await fetch(url);
