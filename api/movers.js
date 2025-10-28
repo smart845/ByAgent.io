@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 
 const router = express.Router();
 
-// Список зеркал Bybit, чтобы избежать блокировок по странам
+// 🔁 Список зеркал Bybit, чтобы обойти блокировки по странам
 const BYBIT_MIRRORS = [
   "https://api.bytick.com",
   "https://api.bybit.me",
@@ -11,7 +11,7 @@ const BYBIT_MIRRORS = [
   "https://api.bybitglobal.com"
 ];
 
-// Функция для получения данных с Bybit
+// 🔍 Функция для получения данных с Bybit с перебором зеркал
 async function fetchBybitData() {
   const endpoint = "/v5/market/tickers?category=linear";
   let lastError = null;
@@ -21,13 +21,15 @@ async function fetchBybitData() {
     console.log(`🌍 Trying ${url}`);
     try {
       const response = await fetch(url);
+
+      // Проверяем успешный ответ
       if (response.ok) {
         const data = await response.json();
         if (data?.result?.list) {
           console.log(`✅ Success from ${base}`);
           return data.result.list;
         } else {
-          console.warn(`⚠️ Unexpected format from ${base}`);
+          console.warn(`⚠️ Unexpected response format from ${base}`);
         }
       } else {
         console.warn(`❌ ${base} returned ${response.status} ${response.statusText}`);
@@ -41,20 +43,20 @@ async function fetchBybitData() {
   throw new Error(`All Bybit mirrors failed${lastError ? : ${lastError.message} : ""}`);
 }
 
-// API-роут /api/movers
+// 📊 API /api/movers
 router.get("/movers", async (req, res) => {
   try {
     const data = await fetchBybitData();
 
-    // Пример сортировки по объему
+    // Пример сортировки — по объёму торгов
     const sorted = data
-      .filter(i => i.volume24h && !isNaN(Number(i.volume24h)))
+      .filter(item => item.volume24h && !isNaN(Number(item.volume24h)))
       .sort((a, b) => Number(b.volume24h) - Number(a.volume24h))
       .slice(0, 30);
 
     res.json(sorted);
   } catch (error) {
-    console.error("Bybit API error:", error.message);
+    console.error("❌ Bybit API error:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
