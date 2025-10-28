@@ -28,7 +28,6 @@ app.get("*", (req, res) => {
 });
 
 
-
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Full app (with Telegram) on 0.0.0.0:${PORT}`);
