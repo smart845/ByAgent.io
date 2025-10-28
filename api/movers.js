@@ -1,125 +1,62 @@
-// src/pages/api/movers.js
+import express from "express";
+import fetch from "node-fetch";
 
-// Несколько зеркал Bybit: пробуем по очереди, пока не получим валидный JSON
-const HOSTS = [
-  'https://api.bytick.com/v5',
-  'https://api.bybit.com/v5',
-  'https://api.bybitglobal.com/v5',
+const router = express.Router();
+
+// Список зеркал Bybit, чтобы избежать блокировок по странам
+const BYBIT_MIRRORS = [
+  "https://api.bytick.com",
+  "https://api.bybit.me",
+  "https://api.bybits.in",
+  "https://api.bybitglobal.com"
 ];
 
-/** Простая обёртка таймаута для fetch */
-function withTimeout(promise, ms, desc = 'request') {
-  return new Promise((resolve, reject) => {
-    const id = setTimeout(() => reject(new Error(`Timeout ${ms}ms on ${desc}`)), ms);
-    promise.then(
-      v => { clearTimeout(id); resolve(v); },
-      e => { clearTimeout(id); reject(e); }
-    );
-  });
-}
+// Функция для получения данных с Bybit
+async function fetchBybitData() {
+  const endpoint = "/v5/market/tickers?category=linear";
+  let lastError = null;
 
-/** Пытаемся сходить на список хостов по очереди. Возвращаем json.result */
-async function bybitFetch(path, params = {}, { desc = '' } = {}) {
-  const query = new URLSearchParams(params).toString();
-
-  let lastErr;
-  for (const base of HOSTS) {
-    const url = `${base}${path}?${query}`;
+  for (const base of BYBIT_MIRRORS) {
+    const url = ${base}${endpoint};
+    console.log(`🌍 Trying ${url}`);
     try {
-      const res = await withTimeout(
-        fetch(url, {
-          // В некоторых регионах CDN режет «пустые» запросы — добавим UA и Accept
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; ByAgentBot/1.0)',
-            'Accept': 'application/json, text/plain, */*',
-          },
-          // избегаем кэша CDN/edge
-          cache: 'no-store',
-          redirect: 'follow',
-        }),
-        8000,
-        url
-      );
-
-      const text = await res.text();
-
-      // Бывает, что отдают HTML/капчу — сразу пробуем следующее зеркало
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        lastErr = new Error(`Non-JSON from ${url}: ${text.slice(0, 120)}`);
-        continue; // пробуем следующий хост
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.result?.list) {
+          console.log(`✅ Success from ${base}`);
+          return data.result.list;
+        } else {
+          console.warn(`⚠️ Unexpected format from ${base}`);
+        }
+      } else {
+        console.warn(`❌ ${base} returned ${response.status} ${response.statusText}`);
       }
-
-      if (!res.ok) {
-        lastErr = new Error(`HTTP ${res.status} ${res.statusText} at ${url}`);
-        continue;
-      }
-      if (json.retCode !== 0) {
-        lastErr = new Error(`Bybit ${json.retCode}: ${json.retMsg} at ${url}`);
-        continue;
-      }
-
-      return json.result; // успех
-    } catch (e) {
-      lastErr = e;
-      // пробуем следующий хост
+    } catch (error) {
+      console.warn(`⚠️ Fetch failed from ${base}: ${error.message}`);
+      lastError = error;
     }
   }
 
-  // если все попытки провалились
-  throw lastErr || new Error(`All hosts failed for ${path}${desc ? ` (${desc})` : ''}`);
+  throw new Error(`All Bybit mirrors failed${lastError ? : ${lastError.message} : ""}`);
 }
 
-/** Топ растущих/падающих */
-async function fetchTopMovers(dir = 'gainers', limit = 50) {
-  // Берём публичные тикеры фьючерсов (linear)
-  const result = await bybitFetch('/market/tickers', { category: 'linear' }, { desc: 'tickers' });
-  const all = Array.isArray(result?.list) ? result.list : [];
-
-  const topSorted = all
-    .filter(x => x && x.lastPrice && x.price24hPcnt != null)
-    .sort((a, b) => {
-      const aP = +a.price24hPcnt;
-      const bP = +b.price24hPcnt;
-      return dir === 'gainers' ? bP - aP : aP - bP;
-    })
-    .slice(0, limit);
-
-  // Параллельный сбор funding (если недоступен — просто null, не валим весь ответ)
-  const fundingPairs = await Promise.all(
-    topSorted.map(async (it) => {
-      try {
-        const fr = await bybitFetch('/market/funding/history', { symbol: it.symbol, limit: 1 }, { desc: 'funding' });
-        const lst = Array.isArray(fr?.list) ? fr.list : [];
-        return { symbol: it.symbol, fundingRate: lst.length ? +lst[0].fundingRate : null };
-      } catch {
-        return { symbol: it.symbol, fundingRate: null };
-      }
-    })
-  );
-
-  const fMap = new Map(fundingPairs.map(x => [x.symbol, x.fundingRate]));
-  return topSorted.map(item => ({ ...item, fundingRate: fMap.get(item.symbol) ?? null }));
-}
-
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
+// API-роут /api/movers
+router.get("/movers", async (req, res) => {
   try {
-    const { dir } = req.query;
-    const data = await fetchTopMovers(dir || 'gainers');
-    res.status(200).json({ retCode: 0, retMsg: 'OK', result: { list: data } });
+    const data = await fetchBybitData();
+
+    // Пример сортировки по объему
+    const sorted = data
+      .filter(i => i.volume24h && !isNaN(Number(i.volume24h)))
+      .sort((a, b) => Number(b.volume24h) - Number(a.volume24h))
+      .slice(0, 30);
+
+    res.json(sorted);
   } catch (error) {
-    console.error('❌ /api/movers:', error.message);
-    res.status(500).json({
-      retCode: 10001,
-      retMsg: `Internal Server Error: ${error.message}`,
-      result: null,
-    });
+    console.error("Bybit API error:", error.message);
+    res.status(500).json({ error: error.message });
   }
-}
+});
+
+export default router;
